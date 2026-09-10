@@ -2,6 +2,8 @@ import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { GuestCheck, GuestCheckStatus } from './guest-check.entity';
+import { CreateGuestCheckDto } from './dto/create-guest-check';
+import { Spot } from '../spots/spot.entity';
 
 @Injectable()
 export class GuestCheckService {
@@ -10,8 +12,8 @@ export class GuestCheckService {
     @InjectRepository(GuestCheck)
     private readonly guestCheckRepository: Repository<GuestCheck>,
 
-    @InjectRepository(GuestCheck)
-    private readonly spotRepository: Repository<GuestCheck>
+    @InjectRepository(Spot)
+    private readonly spotRepository: Repository<Spot>
   ) 
   {}
 
@@ -28,7 +30,7 @@ export class GuestCheckService {
     }
 
     // RN 2 -- Não abre comanda em mesa com comanda aberta
-    const opened = awai this.guestCheckRepository.exists({
+    const opened = await this.guestCheckRepository.exists({
       where: {spot : {id: dto.spotID}, status: GuestCheckStatus.OPENED}
     })
     if (opened) {
@@ -66,9 +68,30 @@ export class GuestCheckService {
 
 
     // Se chegou, deu certo
-    guestCheck.status == GuestCheckStatus.CLOSED;
+    guestCheck.status = GuestCheckStatus.CLOSED;
 
     return this.guestCheckRepository.save(guestCheck);
+  }
+
+  findOpenedBySpotId(spotID: string): Promise<GuestCheck | null> {
+    return this.guestCheckRepository.findOne({
+      where: {
+        spot: {id: spotID},
+        status: GuestCheckStatus.OPENED
+      },
+      relations: {spot: true}
+    })
+  }
+
+
+  async findOrCreateOpened(spotID: string): Promise<GuestCheck> {
+    const opened = await this.findOpenedBySpotId(spotID);
+
+    if (opened) {
+      return opened;
+    }
+
+    return this.create({spotID})
   }
   
 }
