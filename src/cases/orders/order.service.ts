@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { CreateOrderDto, CreateOrderItemDto } from "./dto/create-order";
 import { OrderItem } from "./entities/order-item.entity";
 import { Order, OrderStatus } from "./entities/order-entity";
@@ -6,6 +6,7 @@ import { GuestCheckService } from "../guest-checks/guest-check.service";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { ProductService } from "../products/product.service";
+import { UpdateOrderStatusDto } from "./dto/update-order-status";
 
 @Injectable()
 export class OrderService {
@@ -28,6 +29,7 @@ export class OrderService {
         return this.orderItemRepository.create({
             product,
             quantity: dto.quantity,
+            price: product.price,
             subtotal
         })
     }
@@ -57,5 +59,43 @@ export class OrderService {
 
         // Gravar no banco o pedido
         return this.orderRepository.save(order);
+    }
+
+    findAll(): Promise<Order[]> {
+        return this.orderRepository.find({
+            order: {createdAt: 'ASC'}
+        });
+    }
+
+    async findOne(id: string): Promise<Order> {
+        const order = await this.orderRepository.findOneBy({ id });
+    
+        if (!order) {
+          throw new NotFoundException('Pedido não encontrado');
+        }
+    
+        return order;
+      }
+
+    async updateStatus(id: string, dto: UpdateOrderStatusDto): Promise<Order>{
+        const order = await this.findOne(id);
+
+        // Determino a sequência obrigatória de mudança de status
+        const nextStatus: Record<OrderStatus, OrderStatus | undefined> = {
+            [OrderStatus.NEW]: OrderStatus.PREPARING,
+            [OrderStatus.PREPARING]: OrderStatus.READY,
+            [OrderStatus.READY]: OrderStatus.DELIVERY,
+            [OrderStatus.DELIVERY]: undefined
+        }
+
+        // Verifico se o client está enviando um status valido
+        if (nextStatus[dto.status] != dto.status) {
+            throw new BadRequestException('Status inválido');
+        }
+        // Forço a mudança de status  
+        order.status = dto.status
+
+        // Grava alteração no banco
+        return this.orderItemRepository.save(order);
     }
 }
