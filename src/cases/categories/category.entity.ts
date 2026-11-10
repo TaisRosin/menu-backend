@@ -10,6 +10,9 @@ export class Category {
   @Column({ length: 60, nullable: false })
   name: string;
 
+  @Column({type: 'text', nullable: true})
+  icon: string;
+
   @Column({ type: 'boolean', default: true })
   active: boolean;
 }
